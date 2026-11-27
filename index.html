@@ -2308,20 +2308,38 @@
             mountedExamIframeKey = '';
         }
 
-        function renderApp() {
-            const root = document.getElementById('app');
-            if (!root) return;
-            if (session.view === 'student_exam') {
-                mountPersistentExamWrapper();
-                return;
-            } else {
-                teardownPersistentExamWrapper();
+function renderApp() {
+    const root = document.getElementById('app');
+    if (!root) return;
+
+    // Simpan ID & posisi kursor kolom pencarian yang sedang aktif diketik
+    const activeEl = document.activeElement;
+    const activeId = (activeEl && root.contains(activeEl) && activeEl.id) ? activeEl.id : null;
+    const selStart = activeId && typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null;
+    const selEnd = activeId && typeof activeEl.selectionEnd === 'number' ? activeEl.selectionEnd : null;
+
+    if (session.view === 'student_exam') {
+        mountPersistentExamWrapper();
+        return;
+    } else {
+        teardownPersistentExamWrapper();
+    }
+    if (session.view === 'login') root.innerHTML = renderLoginView();
+    else if (session.view === 'student_dashboard') root.innerHTML = renderStudentDashboardView();
+    else if (session.view === 'proctor') root.innerHTML = renderProctorView();
+    lucide.createIcons();
+
+    // Kembalikan fokus & posisi kursor agar bisa mengetik kata lengkap tanpa terputus
+    if (activeId) {
+        const restoredEl = document.getElementById(activeId);
+        if (restoredEl) {
+            restoredEl.focus();
+            if (selStart !== null && typeof restoredEl.setSelectionRange === 'function') {
+                restoredEl.setSelectionRange(selStart, selEnd);
             }
-            if (session.view === 'login') root.innerHTML = renderLoginView();
-            else if (session.view === 'student_dashboard') root.innerHTML = renderStudentDashboardView();
-            else if (session.view === 'proctor') root.innerHTML = renderProctorView();
-            lucide.createIcons();
         }
+    }
+}
 
         function togglePasswordVisibility(inputId, btnElement) {
             const input = document.getElementById(inputId);
@@ -2612,7 +2630,7 @@
                         </div>
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 p-3.5 flex flex-wrap gap-2.5">
-                        <input type="text" value="${sf.search}" oninput="setStudentListFilter('search', this.value)" placeholder="Cari nama atau username..." class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs">
+                        <input type="text" id="student-search-input" value="${sf.search}" oninput="setStudentListFilter('search', this.value)" placeholder="Cari nama atau username..." class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs">
                         <select onchange="setStudentListFilter('className', this.value)" class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-slate-50">
                             <option value="ALL">Semua Kelas (${appState.participants.length})</option>
                             ${uniqueClasses.map(c => `<option value="${c}" ${normalizeClassKey(sf.className) === normalizeClassKey(c) ? 'selected' : ''}>${c}</option>`).join('')}
@@ -2734,7 +2752,7 @@
                         ` : ''}
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-2.5">
-                        <input type="text" value="${mf.search}" oninput="setMonitorFilter('search', this.value)" placeholder="Cari nama atau username..." class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs">
+                        <input type="text" id="monitor-search-input" value="${mf.search}" oninput="setMonitorFilter('search', this.value)" placeholder="Cari nama atau username..." class="flex-1 min-w-[180px] px-3.5 py-2 rounded-xl border border-slate-200 text-xs">
                         <select onchange="setMonitorFilter('status', this.value)" class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-slate-50">
                             <option value="ALL">Semua Status (${baseParticipants.length})</option>
                             <option value="Belum Masuk" ${mf.status === 'Belum Masuk' ? 'selected' : ''}>Belum Masuk</option>
