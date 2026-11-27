@@ -1042,34 +1042,43 @@
             if (diffMins > 0) durInput.value = diffMins;
         }
 
-        function evaluateScheduledExamStatuses() {
-            const now = new Date();
-            let hasChanged = false;
+       function evaluateScheduledExamStatuses() {
+    const now = new Date();
+    let hasChanged = false;
 
-            appState.exams.forEach(exam => {
-                if (exam.status !== 'Belum Mulai') return;
-                const isoDate = parseIndonesianDateToIso(exam.dateStr);
-                const { start, end } = parseSessionTimeRange(exam.sessionStr);
-                const [y, m, d] = isoDate.split('-').map(Number);
-                const [sh, sm] = start.split(':').map(Number);
-                const [eh, em] = end.split(':').map(Number);
+    appState.exams.forEach(exam => {
+        if (exam.status === 'Selesai') return;
 
-                const startDateTime = new Date(y, m - 1, d, sh, sm, 0);
-                const endDateTime = new Date(y, m - 1, d, eh, em, 59);
+        const isoDate = parseIndonesianDateToIso(exam.dateStr);
+        const { start, end } = parseSessionTimeRange(exam.sessionStr);
+        const [y, m, d] = isoDate.split('-').map(Number);
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
 
-                if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) return;
+        const startDateTime = new Date(y, m - 1, d, sh, sm, 0);
+        const endDateTime = new Date(y, m - 1, d, eh, em, 59);
 
-                if (now >= startDateTime && now <= endDateTime) {
-                    exam.status = 'Berlangsung';
-                    hasChanged = true;
-                    if (session.view === 'proctor') {
-                        updateExamInFirebase(exam);
-                    }
-                }
-            });
+        if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) return;
 
-            if (hasChanged) safeRenderApp();
+        if (now > endDateTime) {
+            // Otomatis akhiri ujian jika sudah melewati jam selesai
+            exam.status = 'Selesai';
+            hasChanged = true;
+            if (session.view === 'proctor') {
+                updateExamInFirebase(exam);
+            }
+        } else if (exam.status === 'Belum Mulai' && now >= startDateTime && now <= endDateTime) {
+            // Otomatis buka ujian jika sudah masuk rentang waktu pelaksanaan
+            exam.status = 'Berlangsung';
+            hasChanged = true;
+            if (session.view === 'proctor') {
+                updateExamInFirebase(exam);
+            }
         }
+    });
+
+    if (hasChanged) safeRenderApp();
+}
 
         function parseExamClasses(classNameStr) {
             if (!classNameStr) return [];
