@@ -1882,20 +1882,65 @@ function openExamSession(examId) {
             showToast(`Kunci ujian ${p.name} dibuka!`, 'success');
         }
 
-        function allowReentryParticipant(participantId) {
-            const p = appState.participants.find(item => item.id === participantId);
-            if (!p) return;
-            const exam = appState.exams.find(e => e.id === p.examId);
-            p.status = 'Belum Masuk';
-            p.violations = 0;
-            p.violationLogs = [];
-            p.lastViolationReason = '';
-            p.remainingSeconds = exam ? exam.durationSeconds : 5400;
-            p.lastActive = 'Diizinkan masuk ulang';
-            updateParticipantInFirebase(p);
-            renderApp();
-            showToast(`${p.name} diizinkan masuk ulang.`, 'info');
+async function bulkResetParticipants() {
+    const mf = appState.monitorFilter;
+    const selectedExam = appState.exams.find(e => e.id === appState.selectedMonitoringExamId) || appState.exams[0];
+    const baseParticipants = selectedExam
+        ? appState.participants.filter(p => examIncludesClass(selectedExam.className, p.className) || p.examId === selectedExam.id)
+        : appState.participants;
+
+    const searchLower = (mf.search || '').trim().toLowerCase();
+    const targetList = baseParticipants.filter(p => {
+        const matchSearch = !searchLower || p.name.toLowerCase().includes(searchLower) || p.username.toLowerCase().includes(searchLower);
+        const matchStatus = mf.status === 'ALL' || p.status === mf.status;
+        return matchSearch && matchStatus && (p.status !== 'Belum Masuk' || getEffectiveViolationCount(p) > 0);
+    });
+
+    if (targetList.length === 0) {
+        showToast('Semua siswa pada filter ini sudah dalam keadaan Reset (Belum Masuk).', 'info');
+        return;
+    }
+
+    if (!confirm(`Reset status ujian untuk ${targetList.length} siswa yang tampil pada filter saat ini?`)) return;
+
+    const defaultDuration = selectedExam ? selectedExam.durationSeconds : 5400;
+    let batch = db ? db.batch() : null;
+    let opCount = 0;
+
+    for (const p of targetList) {
+        p.status = 'Belum Masuk';
+        p.violations = 0;
+        p.violationLogs = [];
+        p.lastViolationReason = '';
+        p.remainingSeconds = defaultDuration;
+        p.lastActive = 'Direset massal pengawas';
+
+        if (db && batch) {
+            batch.update(db.collection('participants').doc(p.id), {
+                status: 'Belum Masuk',
+                violations: 0,
+                violation_logs: [],
+                last_violation_reason: '',
+                remaining_seconds: defaultDuration,
+                last_active: 'Direset massal pengawas',
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            opCount++;
+            if (opCount >= 450) {
+                await batch.commit();
+                batch = db.batch();
+                opCount = 0;
+            }
         }
+    }
+
+    if (db && batch && opCount > 0) {
+        await batch.commit();
+    }
+
+    renderApp();
+    showToast(`Berhasil mereset ${targetList.length} siswa sekaligus!`, 'success');
+}
 
         function openAddParticipantModal(editId = null) {
             const classSelect = document.getElementById('p-input-class');
@@ -2783,6 +2828,9 @@ function renderApp() {
                             <option value="Terkunci" ${mf.status === 'Terkunci' ? 'selected' : ''}>Terkunci</option>
                             <option value="Selesai" ${mf.status === 'Selesai' ? 'selected' : ''}>Selesai</option>
                         </select>
+                        <button type="button" onclick="bulkResetParticipants()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition">
+        Reset Massal
+    </button>
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                         <div class="overflow-x-auto">
