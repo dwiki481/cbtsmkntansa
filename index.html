@@ -1839,14 +1839,26 @@
             showToast(`Token baru ${exam.subject}: ${exam.token}`, 'info');
         }
 
-        function openExamSession(examId) {
-            const exam = appState.exams.find(e => e.id === examId);
-            if (!exam) return;
-            exam.status = 'Berlangsung';
-            updateExamInFirebase(exam);
-            renderApp();
-            showToast(`Ujian ${exam.subject} telah dibuka!`, 'success');
-        }
+function openExamSession(examId) {
+    const exam = appState.exams.find(e => e.id === examId);
+    if (!exam) return;
+
+    const isoDate = parseIndonesianDateToIso(exam.dateStr);
+    const { end } = parseSessionTimeRange(exam.sessionStr);
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const endDateTime = new Date(y, m - 1, d, eh, em, 59);
+
+    if (!isNaN(endDateTime.getTime()) && new Date() > endDateTime) {
+        showToast('Batas jam akhir sudah lewat! Klik Edit dan perpanjang jam selesai terlebih dahulu.', 'warning');
+        return;
+    }
+
+    exam.status = 'Berlangsung';
+    updateExamInFirebase(exam);
+    renderApp();
+    showToast(`Ujian ${exam.subject} telah dibuka!`, 'success');
+}
 
         function endExamSession(examId) {
             const exam = appState.exams.find(e => e.id === examId);
@@ -2710,10 +2722,12 @@ function renderApp() {
                                                 </div>
                                             </div>
                                             <div class="flex flex-wrap gap-2">
-                                                ${ex.status !== 'Berlangsung'
-                                                    ? `<button type="button" onclick="openExamSession('${ex.id}')" class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold">Buka Ujian</button>`
-                                                    : `<button type="button" onclick="endExamSession('${ex.id}')" class="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold">Akhiri Ujian</button>`
-                                                }
+                                                ${ex.status === 'Berlangsung'
+    ? `<button type="button" onclick="endExamSession('${ex.id}')" class="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold">Akhiri Ujian</button>`
+    : ex.status === 'Selesai'
+        ? `<button type="button" disabled title="Waktu ujian sudah habis. Klik Edit untuk menambah jam ujian." class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 text-xs font-semibold cursor-not-allowed">Ujian Selesai</button>`
+        : `<button type="button" onclick="openExamSession('${ex.id}')" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">Buka Ujian</button>`
+}
                                                 ${isAdmin ? `
                                                     <button type="button" onclick="openScheduleModal('${ex.id}')" class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold">Edit</button>
                                                     <button type="button" onclick="openDeleteExamModal('${ex.id}')" class="px-3.5 py-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 text-xs font-semibold">Hapus</button>
